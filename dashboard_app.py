@@ -2742,6 +2742,20 @@ class DashboardApp:
             else:
                 st.sidebar.info("⏳ Quotes Dashboard awaiting data...")
             
+            # Targets CSV upload
+            targets_uploaded_file = st.sidebar.file_uploader(
+                "🎯 Targets (CSV)",
+                type=['csv'],
+                key="global_targets_uploader",
+                help="Upload your targets CSV file to enable Quota Attainment Dashboard"
+            )
+            
+            # Show upload status for targets
+            if targets_uploaded_file is not None:
+                st.sidebar.success(f"✅ Targets data uploaded: {targets_uploaded_file.name}")
+            else:
+                st.sidebar.info("⏳ Quota Attainment Dashboard awaiting targets data...")
+            
             st.sidebar.markdown("---")
             
             # Page navigation in sidebar
@@ -2760,7 +2774,7 @@ class DashboardApp:
             elif page == "Quotes Dashboard":
                 self.render_quotes_page(quotes_uploaded_file)
             else:
-                self.render_quota_attainment_page(sales_uploaded_file)
+                self.render_quota_attainment_page(sales_uploaded_file, targets_uploaded_file)
             
             # Display timestamp
             st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -2769,7 +2783,7 @@ class DashboardApp:
             st.error(f"Application error: {str(e)}")
             st.exception(e)
     
-    def render_quota_attainment_page(self, sales_uploaded_file=None):
+    def render_quota_attainment_page(self, sales_uploaded_file=None, targets_uploaded_file=None):
         """Render the quota attainment page"""
         st.title("🎯 Quota Attainment Dashboard")
         st.markdown("---")
@@ -2797,7 +2811,11 @@ class DashboardApp:
             return
         
         # Load targets
-        targets = QuotaAttainmentManager.create_targets_data()
+        targets = QuotaAttainmentManager.create_targets_data(targets_uploaded_file)
+        
+        if not targets:
+            st.warning("📄 Please upload a valid targets CSV file in the sidebar to view quota attainment.")
+            return
         
         # Year selection
         available_years = sorted(sales_df['Year'].unique())
@@ -2893,41 +2911,61 @@ class QuotaAttainmentManager:
     """Handles quota attainment dashboard functionality"""
     
     @staticmethod
-    def create_targets_data():
-        """Create target data - in production this could come from another CSV"""
-        targets = {
-            # 2024 targets
-            ('2024', 'Q1'): 700000,
-            ('2024', 'Q2'): 800000, 
-            ('2024', 'Q3'): 850000,
-            ('2024', 'Q4'): 900000,
-            ('2024', '01'): 233333, ('2024', '02'): 233333, ('2024', '03'): 233334,
-            ('2024', '04'): 266667, ('2024', '05'): 266666, ('2024', '06'): 266667,
-            ('2024', '07'): 283333, ('2024', '08'): 283333, ('2024', '09'): 283334,
-            ('2024', '10'): 300000, ('2024', '11'): 300000, ('2024', '12'): 300000,
-            
-            # 2025 targets
-            ('2025', 'Q1'): 733333,
-            ('2025', 'Q2'): 1100000, 
-            ('2025', 'Q3'): 953333,
-            ('2025', 'Q4'): 880000,
-            ('2025', '01'): 244444, ('2025', '02'): 244444, ('2025', '03'): 244444,
-            ('2025', '04'): 366667, ('2025', '05'): 366667, ('2025', '06'): 366667,
-            ('2025', '07'): 317778, ('2025', '08'): 317778, ('2025', '09'): 317778,
-            ('2025', '10'): 293333, ('2025', '11'): 293333, ('2025', '12'): 293333,
-            
-            # 2023 targets
-            ('2023', 'Q1'): 600000,
-            ('2023', 'Q2'): 650000, 
-            ('2023', 'Q3'): 700000,
-            ('2023', 'Q4'): 750000,
-            ('2023', '01'): 200000, ('2023', '02'): 200000, ('2023', '03'): 200000,
-            ('2023', '04'): 216667, ('2023', '05'): 216666, ('2023', '06'): 216667,
-            ('2023', '07'): 233333, ('2023', '08'): 233333, ('2023', '09'): 233334,
-            ('2023', '10'): 250000, ('2023', '11'): 250000, ('2023', '12'): 250000,
-        }
-        
-        return targets
+    def create_targets_data(targets_uploaded_file=None):
+        """Load target data from a CSV file uploaded by the user.
+
+        Expected CSV columns: Year, Period, Target
+        - Year: e.g. 2023, 2024
+        - Period: e.g. Q1–Q4 or 01–12
+        - Target: numeric target value
+        """
+        if targets_uploaded_file is None:
+            st.warning("Please upload a targets CSV file using the sidebar to enable quota attainment analysis.")
+            return {}
+
+        try:
+            targets_df = pd.read_csv(targets_uploaded_file)
+
+            required_columns = {"Year", "Period", "Target"}
+            if not required_columns.issubset(targets_df.columns):
+                missing = required_columns.difference(set(targets_df.columns))
+                st.error(
+                    f"Targets CSV is missing required columns: {', '.join(sorted(missing))}. "
+                    "Expected columns are: Year, Period, Target."
+                )
+                return {}
+
+            targets = {}
+            for _, row in targets_df.iterrows():
+                if pd.isna(row["Year"]) or pd.isna(row["Period"]) or pd.isna(row["Target"]):
+                    continue
+
+                # Normalize year and period to strings to match existing key format
+                year_value = row["Year"]
+                if isinstance(year_value, str):
+                    year_str = year_value.strip()
+                else:
+                    try:
+                        year_str = str(int(year_value))
+                    except (TypeError, ValueError):
+                        continue
+
+                period_str = str(row["Period"]).strip()
+
+                try:
+                    target_value = float(row["Target"])
+                except (TypeError, ValueError):
+                    continue
+
+                targets[(year_str, period_str)] = target_value
+
+            if not targets:
+                st.warning("No valid target rows were found in the uploaded targets CSV file.")
+
+            return targets
+        except Exception as e:
+            st.error(f"Error loading targets CSV file: {str(e)}")
+            return {}
 
     @staticmethod
     def format_currency(value):
