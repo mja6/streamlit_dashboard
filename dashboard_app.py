@@ -29,28 +29,7 @@ st.set_page_config(
 )
 
 
-def get_data_path():
-    """Find the data directory across different platforms"""
-    # Primary path - the exact location specified by user
-    primary_path = Path.home() / "Dropbox" / "python" / "streamlit_dashboard" / "src" / "data"
-    
-    possible_paths = [
-        primary_path,  # User's specified path
-        Path.cwd() / "data",  # Relative data directory
-        Path("C:\\Users\\manzalone\\Dropbox\\python\\streamlit_dashboard\\src\\data"),  # Absolute path
-        Path.cwd()  # Fallback to current directory
-    ]
-    
-    for path in possible_paths:
-        if path.exists():
-            return path
-    
-    # Default to the primary path even if it doesn't exist (will show proper error)
-    return primary_path
 
-DATA_DIR = get_data_path()
-SALES_CSV_PATH = str(DATA_DIR / "sales.csv")
-QUOTES_CSV_PATH = str(DATA_DIR / "quotes.csv")
 
 # Custom CSS - optimized for dark theme and quota attainment
 st.markdown("""
@@ -559,7 +538,8 @@ class ChartManager:
                 2022: 2250000,
                 2023: 2250000,
                 2024: 3000000,
-                2025: 3666666
+                2025: 3666666,
+                2026: 3850000
             }
             
             # Create performance data
@@ -3518,4 +3498,5 @@ def main():
         st.exception(e)
 
 if __name__ == "__main__":
+
     main()
